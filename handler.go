@@ -7,15 +7,25 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	database "github.com/NickLiu-0717/Chirpy/internal/database"
+	"github.com/google/uuid"
 )
 
 const errorMessage1 = "Chirp is too long"
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
-	dbQueries      *database.Queries
+	db             *database.Queries
+	dev            string
+}
+
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
 }
 
 func profaneReplace(str string, profaneWords []string) string {
@@ -69,17 +79,67 @@ func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(htmlResponse))
 }
 
-func (cfg *apiConfig) resetHandler(http.ResponseWriter, *http.Request) {
-	cfg.fileserverHits.Store(0)
+func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
+	if cfg.dev != "dev" {
+		w.WriteHeader(403)
+		return
+	}
+	err := cfg.db.DeleteAllUsers(r.Context())
+	if err != nil {
+		log.Printf("Error deleting all users: %s", err)
+		w.WriteHeader(500)
+		return
+	}
 }
 
-func validatechirpy(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) addnewuser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	type newUser struct {
+		Email string `json:"email"`
+	}
+	defer r.Body.Close()
+	params := newUser{}
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&params)
+	if err != nil {
+		log.Printf("Error decoding parameters: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	dbUser, err := cfg.db.CreateUser(r.Context(), params.Email)
+	if err != nil {
+		log.Printf("Error creating user: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	user := User{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+	}
+	dat, err := json.Marshal(user)
+	if err != nil {
+		log.Printf("Error marshaling json: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	w.WriteHeader(201)
+	w.Write(dat)
+}
+
+func (cfg *apiConfig) createchirp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	type requestBody struct {
-		RBody string `json:"body"`
+		RBody  string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
 	}
-	type requestClean struct {
-		Clean string `json:"cleaned_body"`
+	type Chirps struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    uuid.UUID `json:"user_id"`
 	}
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
@@ -92,7 +152,7 @@ func validatechirpy(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(b.RBody) > 140 {
 		if err := respondWithError(w, 400, errorMessage1); err != nil {
-			log.Printf("Error decoding parameters: %s", err)
+			log.Printf("Error responding with error: %s", err)
 			w.WriteHeader(500)
 			return
 		}
@@ -100,10 +160,25 @@ func validatechirpy(w http.ResponseWriter, r *http.Request) {
 	}
 	profaneWords := []string{"kerfuffle", "sharbert", "fornax"}
 	cleanword := profaneReplace(b.RBody, profaneWords)
-	v := requestClean{Clean: cleanword}
-	err = respondWithJSON(w, 200, v)
+	dbChirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body:   cleanword,
+		UserID: b.UserID,
+	})
 	if err != nil {
-		log.Printf("Error decoding parameters: %s", err)
+		log.Printf("Error creating chirp: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	chirp := Chirps{
+		ID:        dbChirp.ID,
+		CreatedAt: dbChirp.CreatedAt,
+		UpdatedAt: dbChirp.UpdatedAt,
+		Body:      dbChirp.Body,
+		UserID:    dbChirp.UserID,
+	}
+	err = respondWithJSON(w, 201, chirp)
+	if err != nil {
+		log.Printf("Error responding with chirp json: %s", err)
 		w.WriteHeader(500)
 		return
 	}
