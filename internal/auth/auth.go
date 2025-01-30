@@ -27,3 +27,12 @@ func GetBearerToken(headers http.Header) (string, error) {
 	tokenSecret := strings.TrimPrefix(authHeader, "Bearer ")
 	return tokenSecret, nil
 }
+
+func GetAPIKey(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("error: No header found")
+	}
+	tokenSecret := strings.TrimPrefix(authHeader, "ApiKey ")
+	return tokenSecret, nil
+}

@@ -28,6 +28,10 @@ func main() {
 	if secretkey == "" {
 		log.Fatal("SECRET must be set")
 	}
+	polkakey := os.Getenv("POLKA_KEY")
+	if polkakey == "" {
+		log.Fatal("POLKA_KEY must be set")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Printf("Error opening database: %s", err)
@@ -39,6 +43,7 @@ func main() {
 		db:             dbQueries,
 		dev:            platform,
 		secretKey:      secretkey,
+		polkaKey:       polkakey,
 	}
 
 	mux := http.NewServeMux()
@@ -64,6 +69,7 @@ func main() {
 	mux.HandleFunc("POST /api/revoke", apicfg.revokehandler)
 	mux.HandleFunc("PUT /api/users", apicfg.changeUserInfo)
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apicfg.deletechirp)
+	mux.HandleFunc("POST /api/polka/webhooks", apicfg.webhookhandler)
 
 	log.Printf("Serving on port: %s\n", port)
 	log.Fatal(server.ListenAndServe())

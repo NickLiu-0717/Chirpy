@@ -65,6 +65,7 @@ func (cfg *apiConfig) userlogin(w http.ResponseWriter, r *http.Request) {
 		Email:        dbUser.Email,
 		Token:        token,
 		RefreshToken: dbRefreshToken.Token,
+		IsChirpyRed:  dbUser.IsChirpyRed,
 	}
 	if err = respondWithJSON(w, 200, user); err != nil {
 		log.Printf("Error responding with json: %s", err)

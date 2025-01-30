@@ -22,5 +22,11 @@ Update users
 set hashed_password = $1, email = $2, updated_at = NOW()
 where id = $3;
 
+-- name: UpgradeChirpyRed :one
+Update users
+set is_chirpy_red = TRUE
+where id = $1
+RETURNING *;
+
 -- name: DeleteAllUsers :exec
 DELETE FROM users;

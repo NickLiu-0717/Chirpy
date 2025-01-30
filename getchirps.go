@@ -4,16 +4,40 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 
+	"github.com/NickLiu-0717/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) getallchirps(w http.ResponseWriter, r *http.Request) {
-	dbcps, err := cfg.db.GetAllChirps(r.Context())
-	if err != nil {
-		log.Printf("Error getting all chirps: %s", err)
-		w.WriteHeader(500)
-		return
+	a := r.URL.Query().Get("author_id")
+	s := r.URL.Query().Get("sort")
+	var dbcps []database.Chirp
+	var err error
+	if a == "" {
+		dbcps, err = cfg.db.GetAllChirps(r.Context())
+		if err != nil {
+			log.Printf("Error getting all chirps: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+	} else {
+		authorID, err := uuid.Parse(s)
+		if err != nil {
+			log.Printf("Error parsing uuid: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+		dbcps, err = cfg.db.GetAuthorChirps(r.Context(), authorID)
+		if err != nil {
+			log.Printf("Error getting all chirps: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+	}
+	if s == "desc" {
+		sort.Slice(dbcps, func(i, j int) bool { return dbcps[i].CreatedAt.After(dbcps[j].CreatedAt) })
 	}
 	var chirps []Chirp
 	for _, dbChirp := range dbcps {
@@ -26,15 +50,12 @@ func (cfg *apiConfig) getallchirps(w http.ResponseWriter, r *http.Request) {
 		}
 		chirps = append(chirps, chirp)
 	}
-
-	dat, err := json.Marshal(chirps)
-	if err != nil {
-		log.Printf("Error marshaling chirps: %s", err)
+	if err = respondWithJSON(w, 200, chirps); err != nil {
+		log.Printf("Error responding json: %s", err)
 		w.WriteHeader(500)
 		return
 	}
-	w.WriteHeader(200)
-	w.Write(dat)
+
 }
 
 func (cfg *apiConfig) getonechirp(w http.ResponseWriter, r *http.Request) {
