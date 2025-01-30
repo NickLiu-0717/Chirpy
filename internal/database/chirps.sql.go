@@ -49,3 +49,86 @@ func (q *Queries) DeleteAllChirps(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteAllChirps)
 	return err
 }
+
+const deleteOneChirp = `-- name: DeleteOneChirp :one
+DELETE FROM chirps
+WHERE id = $1
+RETURNING id, created_at, updated_at, body, user_id
+`
+
+func (q *Queries) DeleteOneChirp(ctx context.Context, id uuid.UUID) (Chirp, error) {
+	row := q.db.QueryRowContext(ctx, deleteOneChirp, id)
+	var i Chirp
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Body,
+		&i.UserID,
+	)
+	return i, err
+}
+
+const getAllChirps = `-- name: GetAllChirps :many
+Select id, created_at, updated_at, body, user_id from chirps
+order by created_at
+`
+
+func (q *Queries) GetAllChirps(ctx context.Context) ([]Chirp, error) {
+	rows, err := q.db.QueryContext(ctx, getAllChirps)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Chirp
+	for rows.Next() {
+		var i Chirp
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Body,
+			&i.UserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOneChirp = `-- name: GetOneChirp :one
+select id, created_at, updated_at, body, user_id from chirps
+where id = $1
+`
+
+func (q *Queries) GetOneChirp(ctx context.Context, id uuid.UUID) (Chirp, error) {
+	row := q.db.QueryRowContext(ctx, getOneChirp, id)
+	var i Chirp
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Body,
+		&i.UserID,
+	)
+	return i, err
+}
+
+const getUserFromChirp = `-- name: GetUserFromChirp :one
+Select user_id from chirps
+where id = $1
+`
+
+func (q *Queries) GetUserFromChirp(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, getUserFromChirp, id)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}

@@ -4,10 +4,7 @@ CREATE TABLE chirps (
     created_at TIMESTAMP not null,
     updated_at TIMESTAMP not null,
     body text not null,
-    user_id UUID not null,
-    constraint fk_user_id
-    foreign key (user_id)
-    references users(id) ON DELETE CASCADE
+    user_id UUID not null references users(id) ON DELETE CASCADE
 );
 
 -- +goose Down
